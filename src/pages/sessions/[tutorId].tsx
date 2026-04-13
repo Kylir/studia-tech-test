@@ -1,42 +1,58 @@
-import { useRouter } from "next/router";
+// ABOUTME: Page listing available sessions for a given tutor.
+// ABOUTME: Allows a student to book a session via the bookSession mutation.
 
-/**
- * ============================================================
- *  TUTOR SESSIONS PAGE — YOUR TASK
- * ============================================================
- *
- *  Build a page that displays a tutor's available sessions
- *  and allows a student to book them.
- *
- *  Requirements:
- *    - Use the tRPC hook to fetch available sessions for the tutor
- *    - Display sessions using your SessionCard component
- *    - Implement booking via the bookSession mutation
- *    - Show appropriate loading and error states
- *    - After a successful booking, refresh the sessions list
- *    - For simplicity, hardcode the studentId as "student-01"
- *
- *  Hints:
- *    - The tutorId comes from the URL: /sessions/[tutorId]
- *    - Use `trpc.session.getAvailableSessions.useQuery()`
- *    - Use `trpc.session.bookSession.useMutation()`
- *    - Consider what happens to the UI during and after booking
- *
- *  We're NOT judging visual design here. Clean, functional React
- *  with proper TypeScript and state management is what we're after.
- * ============================================================
- */
+import { useState } from "react";
+import { useRouter } from "next/router";
+import { trpc } from "~/utils/trpc";
+import SessionCard from "~/components/SessionCard";
+
+const STUDENT_ID = "student-01";
 
 export default function TutorSessionsPage() {
   const router = useRouter();
   const tutorId = router.query.tutorId as string;
+  const [bookingSessionId, setBookingSessionId] = useState<string | null>(null);
 
-  // TODO: Implement this page
+  const { data: sessions, isLoading, error, refetch } = trpc.session.getAvailableSessions.useQuery(
+    { tutorId },
+    { enabled: !!tutorId }
+  );
+
+  const bookSession = trpc.session.bookSession.useMutation({
+    onSuccess: () => {
+      refetch();
+      setBookingSessionId(null);
+    },
+    onError: () => {
+      setBookingSessionId(null);
+    },
+  });
+
+  const handleBook = (sessionId: string) => {
+    setBookingSessionId(sessionId);
+    bookSession.mutate({ studentId: STUDENT_ID, sessionId });
+  };
+
+  if (isLoading) return <main className="max-w-xl mx-auto p-8 font-sans"><p className="text-gray-500">Loading sessions…</p></main>;
+  if (error) return <main className="max-w-xl mx-auto p-8 font-sans"><p className="text-gray-500">Error: {error.message}</p></main>;
 
   return (
     <main className="max-w-xl mx-auto p-8 font-sans">
-      <h1>Tutor Sessions</h1>
-      <p>TODO: Fetch and display available sessions for tutor {tutorId}</p>
+      <h1 className="mb-1">Available Sessions</h1>
+      {sessions?.length === 0
+        ? <p className="text-gray-500">No sessions available.</p>
+        : sessions?.map((session) => (
+            <SessionCard
+              key={session.id}
+              title={session.title}
+              startsAt={new Date(session.startsAt)}
+              endsAt={new Date(session.endsAt)}
+              spotsRemaining={session.spotsRemaining}
+              isBooking={bookingSessionId === session.id}
+              onBook={() => handleBook(session.id)}
+            />
+          ))
+      }
     </main>
   );
 }
