@@ -40,8 +40,32 @@ export const sessionRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO: Implement this procedure
-      throw new Error("Not implemented");
+      const sessions = await ctx.prisma.session.findMany({
+        where: {
+          tutorId: input.tutorId,
+          startsAt: { gt: new Date() },
+        },
+        include: {
+          tutor: true,
+          bookings: {
+            where: { status: "confirmed" },
+          },
+        },
+        orderBy: { startsAt: "asc" },
+      });
+
+      return sessions
+        .filter((s) => s.bookings.length < s.capacity)
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          startsAt: s.startsAt,
+          endsAt: s.endsAt,
+          capacity: s.capacity,
+          spotsRemaining: s.capacity - s.bookings.length,
+          tutorName: s.tutor.name,
+          tutorSubject: s.tutor.subject,
+        }));
     }),
 
   /**
@@ -71,8 +95,47 @@ export const sessionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // TODO: Implement this procedure
-      throw new Error("Not implemented");
+      const session = await ctx.prisma.session.findUnique({
+        where: { id: input.sessionId },
+        include: {
+          bookings: { where: { status: "confirmed" } },
+        },
+      });
+
+      if (!session) throw new Error("Session not found");
+      if (session.startsAt <= new Date()) throw new Error("Session is in the past");
+      if (session.bookings.length >= session.capacity) throw new Error("Session is fully booked");
+
+      const existing = await ctx.prisma.booking.findUnique({
+        where: {
+          studentId_sessionId: {
+            studentId: input.studentId,
+            sessionId: input.sessionId,
+          },
+        },
+      });
+
+      if (existing?.status === "confirmed") throw new Error("Student already has a confirmed booking for this session");
+
+      return ctx.prisma.booking.upsert({
+        where: {
+          studentId_sessionId: {
+            studentId: input.studentId,
+            sessionId: input.sessionId,
+          },
+        },
+        create: {
+          studentId: input.studentId,
+          sessionId: input.sessionId,
+          notes: input.notes,
+          status: "confirmed",
+        },
+        update: {
+          status: "confirmed",
+          notes: input.notes,
+        },
+        include: { session: true },
+      });
     }),
 
   /**
@@ -99,8 +162,19 @@ export const sessionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // TODO: Implement this procedure
-      throw new Error("Not implemented");
+      const booking = await ctx.prisma.booking.findUnique({
+        where: { id: input.bookingId },
+        include: { session: true },
+      });
+
+      if (!booking) throw new Error("Booking not found");
+      if (booking.status === "cancelled") throw new Error("Booking is already cancelled");
+      if (booking.session.startsAt <= new Date()) throw new Error("Session has already started");
+
+      return ctx.prisma.booking.update({
+        where: { id: input.bookingId },
+        data: { status: "cancelled" },
+      });
     }),
 
   /**
@@ -122,7 +196,33 @@ export const sessionRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO: Implement this procedure
-      throw new Error("Not implemented");
+      const bookings = await ctx.prisma.booking.findMany({
+        where: {
+          studentId: input.studentId,
+          ...(input.status ? { status: input.status } : {}),
+        },
+        include: {
+          session: {
+            include: { tutor: true },
+          },
+        },
+        orderBy: {
+          session: { startsAt: "desc" },
+        },
+      });
+
+      return bookings.map((b) => ({
+        id: b.id,
+        studentId: b.studentId,
+        sessionId: b.sessionId,
+        status: b.status,
+        notes: b.notes,
+        session: {
+          title: b.session.title,
+          startsAt: b.session.startsAt,
+          endsAt: b.session.endsAt,
+        },
+        tutorName: b.session.tutor.name,
+      }));
     }),
 });
