@@ -1,5 +1,5 @@
 // ABOUTME: Card component for displaying a single tutoring session.
-// ABOUTME: Handles available, full, and booking-in-progress states.
+// ABOUTME: Handles available, full, already-booked, and booking-in-progress states.
 
 import React from "react";
 
@@ -8,8 +8,11 @@ interface SessionCardProps {
   startsAt: Date;
   endsAt: Date;
   spotsRemaining: number;
+  isBooked: boolean;
   isBooking: boolean;
+  isCancelling: boolean;
   onBook: () => void;
+  onCancel: () => void;
 }
 
 export default function SessionCard({
@@ -17,8 +20,11 @@ export default function SessionCard({
   startsAt,
   endsAt,
   spotsRemaining,
+  isBooked,
   isBooking,
+  isCancelling,
   onBook,
+  onCancel,
 }: SessionCardProps) {
   const isFull = spotsRemaining === 0;
 
@@ -32,13 +38,24 @@ export default function SessionCard({
       <p className="text-gray-500">
         {isFull ? "No spots remaining" : `${spotsRemaining} spot${spotsRemaining === 1 ? "" : "s"} remaining`}
       </p>
-      <button
-        onClick={onBook}
-        disabled={isFull || isBooking}
-        className="mt-3 px-4 py-1.5 rounded border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isBooking ? "Booking…" : isFull ? "Full" : "Book"}
-      </button>
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={onBook}
+          disabled={isFull || isBooked || isBooking}
+          className="px-4 py-1.5 rounded border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isBooking ? "Booking…" : isBooked ? "Booked" : isFull ? "Full" : "Book"}
+        </button>
+        {isBooked && (
+          <button
+            onClick={onCancel}
+            disabled={isCancelling}
+            className="px-4 py-1.5 rounded border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
